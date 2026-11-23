@@ -308,6 +308,7 @@ describe("ArenaGit battle git check", () => {
             expect(message).toContain(version.split(" ")[0])
             // The engine keeps the git it started with, so the fix needs a restart, not a retry.
             expect(message).toContain("quit and reopen Agent Duel")
+            expect(message).toContain(process.platform === "linux" ? "ppa:git-core/ppa" : "brew install git")
           }),
         )
       }
@@ -353,6 +354,8 @@ describe("ArenaGit battle git check", () => {
         expect(message).toContain("git-scm.com")
         expect(message).toContain("quit and reopen Agent Duel")
       }
+      // Linux has no Command Line Tools, so the hint names the distro's package manager.
+      if (process.platform === "linux") expect(message).toContain("sudo apt install git")
     }),
   )
 })

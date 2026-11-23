@@ -14,6 +14,7 @@ import {
   resumeProcessGroups,
   sessionShellPids,
   persistedProxyRoutes,
+  reportMissingTool,
   serviceOwnerID,
   stopOwnedServices,
   terminalOpenUnder,
@@ -593,4 +594,27 @@ test.skipIf(process.platform === "win32")("a paused dev server cannot change the
     defaultServiceAdapter.stopProcessGroup?.(churner.pid!, "SIGKILL")
     await rm(dir.path, { recursive: true, force: true })
   }
+})
+
+// A minimal Linux install can lack lsof or ps. Capture then comes back empty with nothing to say
+// why, so the tool name and its hint are logged once instead of on every lookup. The set of reported
+// tools is process-wide and the tests above probe the real process table, so this one uses names
+// nothing else touches rather than lsof and ps themselves.
+test("reports a missing capture tool once, and only for ENOENT", () => {
+  const warnings: string[] = []
+  const warn = (message: string) => warnings.push(message)
+  const enoent = Object.assign(new Error("spawn tool ENOENT"), { code: "ENOENT" })
+
+  reportMissingTool("arena-lsof-probe", enoent, warn)
+  reportMissingTool("arena-lsof-probe", enoent, warn)
+  expect(warnings).toHaveLength(1)
+  expect(warnings[0]).toContain("`arena-lsof-probe` is not on PATH")
+
+  // A different tool gets its own line, once.
+  reportMissingTool("arena-ps-probe", enoent, warn)
+  expect(warnings).toHaveLength(2)
+
+  // Any other failure is the command's own business, not a missing install.
+  reportMissingTool("arena-git-probe", Object.assign(new Error("boom"), { code: "EACCES" }), warn)
+  expect(warnings).toHaveLength(2)
 })

@@ -3,8 +3,9 @@
 Merging to main runs CI; it does not publish an installer. The Desktop Release
 workflow only runs manually on main. It builds the exact commit captured when
 Run workflow is clicked and creates a draft GitHub release after verification.
-It builds a signed Apple Silicon (arm64) app and a signed Windows x64
-installer, and the draft is created only when both succeed.
+It builds a signed Apple Silicon (arm64) app, a signed Windows x64
+installer, and an unsigned Linux x64 AppImage and deb, and the draft is created
+only when every platform succeeds.
 
 ## One-time setup
 
@@ -54,23 +55,25 @@ is configured explicitly.
 2. Open GitHub → Actions → Desktop Release → Run workflow.
 3. Select main and enter the version produced by the command without a leading
    `v`. Root and desktop package versions must match the input.
-4. Approve the environment deployment if required. One approval starts both
-   builds; the job that creates the draft needs no second one. The workflow
-   builds, signs, notarizes, and verifies the app and DMG, and verifies the
-   Windows installer, before creating a draft release.
+4. Approve the environment deployment if required. One approval starts every
+   build; the job that creates the draft needs no second one. The workflow
+   builds, signs, notarizes, and verifies the app and DMG, verifies the Windows
+   installer, and launches the unpacked Linux app under Xvfb, before creating a
+   draft release.
 5. Download the DMG from the run's `signed-macos-arm64` artifact and test it on a
-   Mac as a fresh download, and the installer from `windows-x64` on Windows.
-   Check launch, sign-in, and a normal battle.
-6. Open Releases, review the draft's assets and notes, and click Publish release
+   Mac as a fresh download, the installer from `windows-x64` on Windows, and the
+   AppImage and deb from `linux-x64` on an x64 Linux machine. Check launch,
+   sign-in, and a normal battle.6. Open Releases, review the draft's assets and notes, and click Publish release
    only after testing. Leave "Set as a pre-release" off, including for betas.
 
 ## In-app updates
 
 Release builds check the published GitHub release when they start and every 30
 minutes, download a newer version in the background and offer Install in the
-sidebar; an update the user does not install is applied when the app quits. The
-Mac reads `latest-mac.yml` and the ZIP from the release; Windows reads
-`latest.yml`, the Setup exe and its blockmap.
+sidebar; an update the user does not install is applied when the app quits,
+except in the AppImage. The Mac reads `latest-mac.yml` and the ZIP from the
+release; Windows reads `latest.yml`, the Setup exe and its blockmap; Linux reads
+`latest-linux.yml` and the AppImage or deb.
 
 - Publish is the rollout. A draft is invisible to the app, so test the draft's
   DMG first. A published release reaches every running copy within about half an
@@ -91,13 +94,19 @@ Mac reads `latest-mac.yml` and the ZIP from the release; Windows reads
 - The Windows installer is one-click and per user, in
   `%LOCALAPPDATA%\Programs\Agent Duel`: no pages and no UAC, so an update installs
   silently. An assisted or per-machine installer would ask again on every update.
-
-The workflow fetches the complete tag history and refuses a version that is not
-newer than the highest canonical `vX.Y.Z` or `vX.Y.Z-beta.N` tag. Stable versions
-sort after beta versions for the same base version, and beta numbers use numeric
-ordering. It also refuses an existing GitHub release version. The workflow never
-publishes a release automatically. It does not deploy the hosted backend, publish
-npm packages, or create Linux, Intel Mac or Windows arm64 installers.
-A failed build creates no draft release; retained artifacts may help diagnose
-failures after installer verification. Retry before a draft exists, or use a new
-version after a draft has been created.
+- The AppImage installs an update only when the user clicks Install: its
+  install-on-quit path can hang after the running file is replaced. Its name,
+  `Agent-Duel-x86_64.AppImage`, has no version, so the update overwrites it in
+  place and shortcuts and the `paseo` CLI link keep working. The deb installs
+  the next release's `Agent-Duel-<version>-amd64.deb` with `dpkg`, which asks
+  for an administrator password through pkexec or sudo.
+- The Linux packages need `git`, `lsof` and `procps` (`ps`) at run time. The deb
+  declares all three, so apt installs them; AppImage users install their own.
+  The workflow fetches the complete tag history and refuses a version that is not
+  newer than the highest canonical `vX.Y.Z` or `vX.Y.Z-beta.N` tag. Stable versions
+  sort after beta versions for the same base version, and beta numbers use numeric
+  ordering. It also refuses an existing GitHub release version. The workflow never
+  publishes a release automatically. It does not deploy the hosted backend, publish
+  npm packages, or create Windows, Linux arm64, or Intel Mac installers.A failed build creates no draft release; retained artifacts may help diagnose
+  failures after installer verification. Retry before a draft exists, or use a new
+  version after a draft has been created.
